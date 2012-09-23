@@ -22,7 +22,7 @@
 							<option id="de.innot.avreclipse.toolchain.options.toolchain.size.app.debug.1541411914" name="Print Size" superClass="de.innot.avreclipse.toolchain.options.toolchain.size.app.debug"/>
 							<option id="de.innot.avreclipse.toolchain.options.toolchain.avrdude.app.debug.1617247816" name="AVRDude" superClass="de.innot.avreclipse.toolchain.options.toolchain.avrdude.app.debug"/>
 							<targetPlatform id="de.innot.avreclipse.targetplatform.winavr.app.debug.1043666545" name="AVR Cross-Target" superClass="de.innot.avreclipse.targetplatform.winavr.app.debug"/>
-							<builder buildPath="${workspace_loc:/smiw-rfm/Debug}" id="de.innot.avreclipse.target.builder.winavr.app.debug.1192898818" name="AVR GNU Make Builder" parallelBuildOn="true" parallelizationNumber="optimal" superClass="de.innot.avreclipse.target.builder.winavr.app.debug"/>
+							<builder buildPath="${workspace_loc:/smiw-rfm/Debug}" id="de.innot.avreclipse.target.builder.winavr.app.debug.1192898818" keepEnvironmentInBuildfile="false" name="AVR GNU Make Builder" parallelBuildOn="true" parallelizationNumber="optimal" superClass="de.innot.avreclipse.target.builder.winavr.app.debug"/>
 							<tool id="de.innot.avreclipse.tool.assembler.winavr.app.debug.1716297083" name="AVR Assembler" superClass="de.innot.avreclipse.tool.assembler.winavr.app.debug">
 								<option id="de.innot.avreclipse.assembler.option.debug.level.2132667586" name="Generate Debugging Info" superClass="de.innot.avreclipse.assembler.option.debug.level"/>
 								<inputType id="de.innot.avreclipse.tool.assembler.input.157424528" superClass="de.innot.avreclipse.tool.assembler.input"/>
@@ -48,7 +48,7 @@
 							<tool id="de.innot.avreclipse.tool.objcopy.flash.winavr.app.debug.235232001" name="AVR Create Flash image" superClass="de.innot.avreclipse.tool.objcopy.flash.winavr.app.debug"/>
 							<tool id="de.innot.avreclipse.tool.objcopy.eeprom.winavr.app.debug.1018195396" name="AVR Create EEPROM image" superClass="de.innot.avreclipse.tool.objcopy.eeprom.winavr.app.debug"/>
 							<tool id="de.innot.avreclipse.tool.size.winavr.app.debug.153426775" name="Print Size" superClass="de.innot.avreclipse.tool.size.winavr.app.debug">
-								<option id="de.innot.avreclipse.size.option.formatwithavr.1853912290" superClass="de.innot.avreclipse.size.option.formatwithavr" value="de.innot.avreclipse.size.option.format.avr" valueType="enumerated"/>
+								<option id="de.innot.avreclipse.size.option.formatwithavr.1853912290" name="Size Format" superClass="de.innot.avreclipse.size.option.formatwithavr" value="de.innot.avreclipse.size.option.format.avr" valueType="enumerated"/>
 							</tool>
 							<tool id="de.innot.avreclipse.tool.avrdude.app.debug.503286208" name="AVRDude" superClass="de.innot.avreclipse.tool.avrdude.app.debug"/>
 						</toolChain>
