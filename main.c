@@ -429,6 +429,9 @@ int main(void) {
 			itoa(irmp_data.command, screenCenter[3], 10); //Convert it to string
 			isChanged = 1;
 			intro = 0;
+
+
+			//sprintf(screenCenter[0], "t: %d",  irmp_data.protocol);
 		}
 		if (intro == 0) {
 			switch (lastKey) { //Change the view
