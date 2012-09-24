@@ -34,6 +34,7 @@
 #include "irmp.h"
 #include "irmpconfig.h"
 
+#include "RFM70.h"
 /* ------------------------------------------------------------------------- */
 /* ----------------------------- USB interface ----------------------------- */
 /* ------------------------------------------------------------------------- */
@@ -67,10 +68,14 @@ static int lastKey;
 static uchar lineNo;
 
 static char screenLeft[4][17] = { "Ekran Lewy", "-", "-", "-" };
-static char screenCenter[4][17] = { "Temperatura", " ", "Ost. klawisz", " " };
+//static char screenCenter[4][17] = { "Temperatura", " ", "Ost. klawisz", " " };
+static char screenCenter[4][17] = { "Temperatura", "", "", "" };
 static char screenRight[4][17] = { "Ekran Prawy", "-", "-", "-" };
 
 static int intCount = 0;
+
+uint8_t message[32];
+const char on_message[]="wys";
 
 /* ------------------------------------------------------------------------- */
 
@@ -387,19 +392,61 @@ int main(void) {
 	LCD_Clear();
 
 	/* About project screen */
-	LCD_GoTo(center("SMiW 2011/2012"), 0);
-	LCD_WriteText("SMiW 2011/2012");
-	LCD_GoTo(center("Marcin Jabrzyk"), 2);
-	LCD_WriteText("Marcin Jabrzyk");
+	//LCD_GoTo(center("SMiW 2011/2012"), 0);
+	//LCD_WriteText("SMiW 2011/2012");
+	//LCD_GoTo(center("Marcin Jabrzyk"), 2);
+	//LCD_WriteText("Marcin Jabrzyk");
 
 	irmp_init(); //IR libary
 	timer_init(); //IR timmer and ADC starter
 	adc_init(); //ADC configuration
 
 	intro = 0;
+	//_delay_ms(1500);
+	_delay_ms(500);
+	if(RFM70_Initialize(0,(uint8_t*)"Smiw2")){
+			LCD_GoTo(center("init RFM70"), 2);
+			LCD_WriteText("init RFM70");
+			_delay_ms(100);
+	} else {
+		LCD_GoTo(center("not init RFM70"), 1);
+		LCD_WriteText("not init RFM70");
+	}
+	//_delay_ms(1500);
+	LCD_GoTo(0,2);
+	LCD_WriteText("after all");
 	for (;;) { /* main event loop */
 		wdt_reset();
 		usbPoll();
+
+		LCD_GoTo(center('1111'), 1);
+		LCD_WriteText('111');
+		double v = 1.1;
+		dtostrf(v, 6, 2, screenCenter[1]);
+
+		if (Packet_Received()) {
+			//LCD_GoTo(center('1111'), 2);
+			//		LCD_WriteText('111');
+			 strcpy(screenCenter[2], "mam");
+			/*LCD_Clear();*/
+					//char* txt[20];
+
+					Receive_Packet(message);
+					//if (message[6] == 'C'){
+						//cli();
+						//LCD_ClearLine(3);
+						strncpy(screenCenter[3], (char*)message, 7);
+						//_delay_ms(5);
+						//sei();
+					//}
+					//sprintf(txt,' a %c a ', message[1]);
+					//LCD_GoTo(center('mam cos'), 2);
+					//LCD_WriteText('mam cos');
+
+					//LCD_GoTo(center(txt), 3);
+					//LCD_WriteText(txt);
+		}
+
 		if (irmp_get_data(&irmp_data)) { // When IR decodes a new key presed.
 			lastKey = irmp_data.command; //Save the key
 			itoa(irmp_data.command, screenCenter[3], 10); //Convert it to string
