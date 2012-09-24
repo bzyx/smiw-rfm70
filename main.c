@@ -69,7 +69,7 @@ static uchar lineNo;
 
 static char screenLeft[4][17] = { "Ekran Lewy", "-", "-", "-" };
 //static char screenCenter[4][17] = { "Temperatura", " ", "Ost. klawisz", " " };
-static char screenCenter[4][17] = { "Temperatura", "", "", "" };
+static char screenCenter[4][17] = { "Temperatura", " ", " ", " " };
 static char screenRight[4][17] = { "Ekran Prawy", "-", "-", "-" };
 
 static int intCount = 0;
@@ -419,32 +419,9 @@ int main(void) {
 		wdt_reset();
 		usbPoll();
 
-		LCD_GoTo(center('1111'), 1);
-		LCD_WriteText('111');
-		double v = 1.1;
-		dtostrf(v, 6, 2, screenCenter[1]);
-
 		if (Packet_Received()) {
-			//LCD_GoTo(center('1111'), 2);
-			//		LCD_WriteText('111');
-			 strcpy(screenCenter[2], "mam");
-			/*LCD_Clear();*/
-					//char* txt[20];
-
 					Receive_Packet(message);
-					//if (message[6] == 'C'){
-						//cli();
-						//LCD_ClearLine(3);
 						strncpy(screenCenter[3], (char*)message, 7);
-						//_delay_ms(5);
-						//sei();
-					//}
-					//sprintf(txt,' a %c a ', message[1]);
-					//LCD_GoTo(center('mam cos'), 2);
-					//LCD_WriteText('mam cos');
-
-					//LCD_GoTo(center(txt), 3);
-					//LCD_WriteText(txt);
 		}
 
 		if (irmp_get_data(&irmp_data)) { // When IR decodes a new key presed.
