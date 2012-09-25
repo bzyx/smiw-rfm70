@@ -69,12 +69,12 @@ static uchar lineNo;
 
 static char screenLeft[4][17] = { "Ekran Lewy", "-", "-", "-" };
 //static char screenCenter[4][17] = { "Temperatura", " ", "Ost. klawisz", " " };
-static char screenCenter[4][17] = { "Temperatura", " ", " ", " " };
+static char screenCenter[4][17] = { "", " ", " ", " " };
 static char screenRight[4][17] = { "Ekran Prawy", "-", "-", "-" };
 
 static int intCount = 0;
 
-uint8_t message[32];
+static char message[32]="";
 const char on_message[]="wys";
 
 /* ------------------------------------------------------------------------- */
@@ -369,7 +369,7 @@ int main(void) {
 	uchar i;
 	int intro = 1;
 
-	wdt_enable(WDTO_1S);
+	//wdt_enable(WDTO_1S);
 	/* Even if you don't use the watchdog, turn it off here. On newer devices,
 	 * the status of the watchdog (on/off, period) is PRESERVED OVER RESET!
 	 */
@@ -377,15 +377,16 @@ int main(void) {
 	 * That's the way we need D+ and D-. Therefore we don't need any
 	 * additional hardware initialization.
 	 */
-	usbInit();
-	usbDeviceDisconnect(); /* enforce re-enumeration, do this while interrupts are disabled! */
-	i = 0;
-	while (--i) { /* fake USB disconnect for > 250 ms */
+
+	//usbInit();
+	//usbDeviceDisconnect(); /* enforce re-enumeration, do this while interrupts are disabled! */
+	/*i = 0;
+	while (--i) { // fake USB disconnect for > 250 ms
 		wdt_reset();
 		_delay_ms(1);
 	}
-	usbDeviceConnect();
-	sei();
+	usbDeviceConnect();*/
+	//sei();
 
 	//Ports initialization and other piperials
 	LCD_Initalize();
@@ -397,13 +398,12 @@ int main(void) {
 	//LCD_GoTo(center("Marcin Jabrzyk"), 2);
 	//LCD_WriteText("Marcin Jabrzyk");
 
-	irmp_init(); //IR libary
-	timer_init(); //IR timmer and ADC starter
-	adc_init(); //ADC configuration
+	//irmp_init(); //IR libary
+	//timer_init(); //IR timmer and ADC starter
+	//adc_init(); //ADC configuration
 
+	cli();
 	intro = 0;
-	//_delay_ms(1500);
-	_delay_ms(500);
 	if(RFM70_Initialize(0,(uint8_t*)"Smiw2")){
 			LCD_GoTo(center("init RFM70"), 2);
 			LCD_WriteText("init RFM70");
@@ -412,17 +412,51 @@ int main(void) {
 		LCD_GoTo(center("not init RFM70"), 1);
 		LCD_WriteText("not init RFM70");
 	}
+
+	if (RFM70_Present()){
+		LCD_GoTo(center("jest RFM"), 3);
+		LCD_WriteText("jest RFM");
+	} else {
+		LCD_GoTo(center("nie ma RFM"), 3);
+		LCD_WriteText("nie ma RFM");
+	}
+	_delay_ms(1500);
 	//_delay_ms(1500);
 	LCD_GoTo(0,2);
 	LCD_WriteText("after all");
-	for (;;) { /* main event loop */
-		wdt_reset();
-		usbPoll();
 
-		if (Packet_Received()) {
-					Receive_Packet(message);
-						strncpy(screenCenter[3], (char*)message, 7);
+	sei();
+	for (;;) { /* main event loop */
+		//wdt_reset();
+		//usbPoll();
+
+
+		if (RFM70_Present()){
+			LCD_GoTo(center("jest RFM"), 0);
+			LCD_WriteText("jest RFM");
+		} else {
+			LCD_GoTo(center("nie ma RFM"), 0);
+			LCD_WriteText("nie ma RFM");
 		}
+
+		if (Carrier_Detected()){
+			LCD_GoTo(center("sygnal"), 1);
+			LCD_WriteText("sygnal");
+		} else {
+			LCD_GoTo(center("no signal"), 1);
+			LCD_WriteText("no signal");
+		}
+
+
+		strcpy(screenCenter[2], "");
+		strcpy(screenCenter[3], "");
+		//_delay_ms(1500);
+		if (Packet_Received()) {
+			strcpy(screenCenter[2], "mam cos");
+			Receive_Packet(message);
+			strcat(screenCenter[3], message);
+		}
+		//_delay_ms(250);
 
 		if (irmp_get_data(&irmp_data)) { // When IR decodes a new key presed.
 			lastKey = irmp_data.command; //Save the key
