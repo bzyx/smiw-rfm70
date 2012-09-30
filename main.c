@@ -69,8 +69,11 @@ static uchar lineNo;
 
 static char screenLeft[4][17] = { "Ekran Lewy", "-", "-", "-" };
 //static char screenCenter[4][17] = { "Temperatura", " ", "Ost. klawisz", " " };
-static char screenCenter[4][17] = { "", " ", " ", " " };
+static const char screenCenterTemplate[4][17] = { "Ten:   %s", "Piec:  %s", "Grzej: %s", " " };
+static char screenCenter[4][17] = { "", "", "", "" };
 static char screenRight[4][17] = { "Ekran Prawy", "-", "-", "-" };
+static const char screenDebugTemplate[4][17] = { "Stan RFM: %s", "Nosna: %s", "Odbior: %s", ""};
+static char screenDebug[4][17] = { "Stan RFM: %s", "Nosna: %s", "Odbior: %s", ""};
 
 static int intCount = 0;
 
@@ -320,6 +323,7 @@ void ADC_vect(void) {
 #define MV_PER_DEGREE_C  0.01000
 	static int sampleNo;
 	static float adcAccumlator;
+	char tmp[10];
 
 	sampleNo++;
 
@@ -336,7 +340,9 @@ void ADC_vect(void) {
 	}
 	if (sampleNo == NOOFSAMLES) {
 		adcAccumlator /= NOOFSAMLES;
-		dtostrf(adcAccumlator, 6, 2, screenCenter[1]);
+		//dtostrf(adcAccumlator, 6, 2, screenCenter[1]);
+		dtostrf(adcAccumlator, 6, 2, tmp);
+		sprintf(screenCenter[0], screenCenterTemplate[0], tmp);
 		isChanged = 1;
 		adcAccumlator = 0;
 		sampleNo = 0;
@@ -350,7 +356,7 @@ unsigned char center(char* string) {
 	return len;
 }
 
-void printScreen(char screen[4][17]) {
+void printScreenWithCenter(char screen[4][17]) {
 	if (isChanged == 1) {
 		LCD_Clear();
 		isChanged = 0;
@@ -365,27 +371,43 @@ void printScreen(char screen[4][17]) {
 	LCD_WriteText(screen[3]);
 }
 
+void printScreen(char screen[4][17]) {
+	if (isChanged == 1) {
+		LCD_Clear();
+		isChanged = 0;
+	}
+	LCD_GoTo(0, 0);
+	LCD_WriteText(screen[0]);
+	LCD_GoTo(0, 1);
+	LCD_WriteText(screen[1]);
+	LCD_GoTo(0, 2);
+	LCD_WriteText(screen[2]);
+	LCD_GoTo(0, 3);
+	LCD_WriteText(screen[3]);
+}
+
 int main(void) {
 	uchar i;
 	int intro = 1;
+	static char reciveErrorCount = 0;
+	static char carrierErrorCount = 0;
 
-	//wdt_enable(WDTO_1S);
+	wdt_enable(WDTO_1S);
 	/* Even if you don't use the watchdog, turn it off here. On newer devices,
 	 * the status of the watchdog (on/off, period) is PRESERVED OVER RESET!
-	 */
-	/* RESET status: all port bits are inputs without pull-up.
+ 	 * RESET status: all port bits are inputs without pull-up.
 	 * That's the way we need D+ and D-. Therefore we don't need any
 	 * additional hardware initialization.
 	 */
 
-	//usbInit();
-	//usbDeviceDisconnect(); /* enforce re-enumeration, do this while interrupts are disabled! */
-	/*i = 0;
+	usbInit();
+	usbDeviceDisconnect(); /* enforce re-enumeration, do this while interrupts are disabled! */
+	i = 0;
 	while (--i) { // fake USB disconnect for > 250 ms
 		wdt_reset();
 		_delay_ms(1);
 	}
-	usbDeviceConnect();*/
+	usbDeviceConnect();
 	//sei();
 
 	//Ports initialization and other piperials
@@ -398,88 +420,90 @@ int main(void) {
 	//LCD_GoTo(center("Marcin Jabrzyk"), 2);
 	//LCD_WriteText("Marcin Jabrzyk");
 
-	//irmp_init(); //IR libary
-	//timer_init(); //IR timmer and ADC starter
-	//adc_init(); //ADC configuration
+	irmp_init(); //IR libary
+	timer_init(); //IR timmer and ADC starter
+	adc_init(); //ADC configuration
 
 	cli();
 	intro = 0;
 	if(RFM70_Initialize(0,(uint8_t*)"Smiw2")){
-			LCD_GoTo(center("init RFM70"), 2);
-			LCD_WriteText("init RFM70");
+			LCD_GoTo(center("Init RFM70"), 2);
+			LCD_WriteText("Init RFM70");
 			_delay_ms(100);
 	} else {
-		LCD_GoTo(center("not init RFM70"), 1);
-		LCD_WriteText("not init RFM70");
+		LCD_GoTo(center("ERR init RFM70"), 1);
+		LCD_WriteText("ERR init RFM70");
 	}
 
 	if (RFM70_Present()){
-		LCD_GoTo(center("jest RFM"), 3);
-		LCD_WriteText("jest RFM");
+		LCD_GoTo(center("RFM70 present"), 3);
+		LCD_WriteText("RFM70 present");
 	} else {
-		LCD_GoTo(center("nie ma RFM"), 3);
-		LCD_WriteText("nie ma RFM");
+		LCD_GoTo(center("RFM70 not present"), 3);
+		LCD_WriteText("RFM70 not present");
 	}
-	_delay_ms(1500);
-	//_delay_ms(1500);
-	LCD_GoTo(0,2);
-	LCD_WriteText("after all");
 
 	sei();
 	for (;;) { /* main event loop */
-		//wdt_reset();
-		//usbPoll();
+		wdt_reset();
+		usbPoll();
 
 
 		if (RFM70_Present()){
-			LCD_GoTo(center("jest RFM"), 0);
-			LCD_WriteText("jest RFM");
+			sprintf(screenDebug[0],screenDebugTemplate[0], "OK");
 		} else {
-			LCD_GoTo(center("nie ma RFM"), 0);
-			LCD_WriteText("nie ma RFM");
+			sprintf(screenDebug[0],screenDebugTemplate[0], "ERROR");
 		}
 
 		if (Carrier_Detected()){
-			LCD_GoTo(center("sygnal"), 1);
-			LCD_WriteText("sygnal");
+			sprintf(screenDebug[1],screenDebugTemplate[1], "OK");
+			carrierErrorCount = 0;
 		} else {
-			LCD_GoTo(center("no signal"), 1);
-			LCD_WriteText("no signal");
+			carrierErrorCount++;
+		}
+
+		if (carrierErrorCount >50){
+			sprintf(screenDebug[1],screenDebugTemplate[1], "NONE");
 		}
 
 
-		strcpy(screenCenter[2], "");
-		strcpy(screenCenter[3], "");
-		//_delay_ms(1500);
+		strcpy(screenCenter[2], " ");
+		strcpy(screenCenter[3], " ");
 		if (Packet_Received()) {
-			strcpy(screenCenter[2], "mam cos");
+			sprintf(screenDebug[2],screenDebugTemplate[2], "OK");
 			Receive_Packet(message);
-			strcat(screenCenter[3], message);
+			sprintf(screenCenter[1], screenCenterTemplate[1], message);
+			//strcat(screenCenter[3], message);
+			reciveErrorCount = 0;
+		} else {
+			reciveErrorCount++;
 		}
-		//_delay_ms(250);
+		if (reciveErrorCount > 90){
+			sprintf(screenDebug[2],screenDebugTemplate[2], "WAIT");
+		}
 
 		if (irmp_get_data(&irmp_data)) { // When IR decodes a new key presed.
 			lastKey = irmp_data.command; //Save the key
 			itoa(irmp_data.command, screenCenter[3], 10); //Convert it to string
 			isChanged = 1;
 			intro = 0;
-
-
-			//sprintf(screenCenter[0], "t: %d",  irmp_data.protocol);
 		}
 		if (intro == 0) {
 			switch (lastKey) { //Change the view
 			case 69:
-				printScreen(screenLeft);
+				printScreenWithCenter(screenLeft);
 				break; //CH-
 			case 70:
-				printScreen(screenCenter);
+				printScreenWithCenter(screenCenter);
 				break; //CH
 			case 71:
-				printScreen(screenRight);
+				printScreenWithCenter(screenRight);
 				break; //CH+
+			case 82:
+				printScreen(screenDebug);
+				break;
 			default:
-				printScreen(screenCenter);
+				printScreenWithCenter(screenCenter);
 				break; //Any other key
 			}
 		}
