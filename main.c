@@ -45,7 +45,7 @@ PROGMEM char usbHidReportDescriptor[22] = { /* USB report descriptor */
 		0xa1, 0x01, // COLLECTION (Application)
 		0x15, 0x00, //   LOGICAL_MINIMUM (0)
 		0x26, 0xff, 0x00, //   LOGICAL_MAXIMUM (255)
-		0x75, 0x02, //   REPORT_SIZE (8) -!!!!!!!! by³o 0x01
+		0x75, 0x03, //   REPORT_SIZE (8) -!!!!!!!! by³o 0x01
 		0x95, 0x80, //   REPORT_COUNT (128)
 		0x09, 0x00, //   USAGE (Undefined)
 		0xb2, 0x02, 0x01, //   FEATURE (Data,Var,Abs,Buf)
@@ -68,17 +68,22 @@ static int lastKey;
 static uchar lineNo;
 
 static char screenLeft[4][17] = { "Ekran Lewy", "-", "-", "-" };
-//static char screenCenter[4][17] = { "Temperatura", " ", "Ost. klawisz", " " };
-static const char screenCenterTemplate[4][17] = { "Ten:   %s", "Piec:  %s", "Grzej: %s", " " };
-static char screenCenter[4][17] = { "", "", "", "" };
+static const char screenCenterTemplate[4][17] = { "Ten:     %s", "Piec:    %s",
+		"Grzej:    %s", "Przycisk:    %s" };
+static char screenCenter[4][17] = { "Ten:   ", "Piec:    ", "Grzej: ",
+		"Przycisk:    " };
 static char screenRight[4][17] = { "Ekran Prawy", "-", "-", "-" };
-static const char screenDebugTemplate[4][17] = { "Stan RFM: %s", "Nosna: %s", "Odbior: %s", ""};
-static char screenDebug[4][17] = { "Stan RFM: %s", "Nosna: %s", "Odbior: %s", ""};
+static const char screenDebugTemplate[4][17] = { "Stan RFM: %s", "Nosna: %s",
+		"Odbior: %s", "" };
+static char screenDebug[4][17] =
+		{ "Stan RFM: %s", "Nosna: %s", "Odbior: %s", "" };
 
 static int intCount = 0;
-
-static char message[32]="";
-const char on_message[]="wys";
+static char message[32] = "";
+static char tempFromMCP[10];
+static char tempFromPiec[10];
+static char tempFromGrzejnik[10];
+static char lastKeyStr[4];
 
 /* ------------------------------------------------------------------------- */
 
@@ -86,14 +91,28 @@ const char on_message[]="wys";
  * the device. For more information see the documentation in usbdrv/usbdrv.h.
  */uchar usbFunctionRead(uchar *data, uchar len) {
 	uchar i;
-	if (len > bytesRemaining) // len is max chunk size
-		len = bytesRemaining; // send an incomplete chunk
-	bytesRemaining -= len;
-	for (i = 0; i < 6; i++)
-		data[i] = screenCenter[1][i]; // copy the data to the buffer
-	data[6] = screenCenter[3][0];
-	data[7] = screenCenter[3][1];
-	return len; // return real chunk size
+
+	if (len > bytesRemaining) {
+		len = bytesRemaining;
+		//send temp3 + irKey
+		for (i = 0; i < 4; i++) {
+			data[i] = tempFromGrzejnik[i];
+		}
+		for (i = 0; i < 2; i++) {
+			data[i + 4] = lastKeyStr[i];
+		}
+	} else {
+		//send temp1 + temp2
+		for (i = 0; i < 4; i++) {
+			data[i] = tempFromMCP[i];
+		}
+		for (i = 0; i < 4; i++) {
+			data[i+4] = tempFromPiec[i];
+		}
+		bytesRemaining -= len;
+
+	}
+	return len;                             // return real chunk size
 }
 
 /* usbFunctionWrite() is called when the host sends a chunk of data to the
@@ -239,12 +258,12 @@ usbMsgLen_t usbFunctionSetup(uchar data[8]) {
 	if ((rq->bmRequestType & USBRQ_TYPE_MASK) == USBRQ_TYPE_CLASS) { /* HID class request */
 		if (rq->bRequest == USBRQ_HID_GET_REPORT) { /* wValue: ReportType (highbyte), ReportID (lowbyte) */
 			/* since we have only one report type, we can ignore the report-ID */
-			bytesRemaining = 8;
-			return USB_NO_MSG; /* use usbFunctionRead() to obtain data */
+			bytesRemaining = 15;
+			return USB_NO_MSG ; /* use usbFunctionRead() to obtain data */
 		} else if (rq->bRequest == USBRQ_HID_SET_REPORT) {
 			/* since we have only one report type, we can ignore the report-ID */
 			bytesRemaining = 24;
-			return USB_NO_MSG; /* use usbFunctionWrite() to receive data from host */
+			return USB_NO_MSG ; /* use usbFunctionWrite() to receive data from host */
 		}
 	} else {
 		/* ignore vendor type requests, we don't use any */
@@ -323,7 +342,6 @@ void ADC_vect(void) {
 #define MV_PER_DEGREE_C  0.01000
 	static int sampleNo;
 	static float adcAccumlator;
-	char tmp[10];
 
 	sampleNo++;
 
@@ -341,8 +359,11 @@ void ADC_vect(void) {
 	if (sampleNo == NOOFSAMLES) {
 		adcAccumlator /= NOOFSAMLES;
 		//dtostrf(adcAccumlator, 6, 2, screenCenter[1]);
-		dtostrf(adcAccumlator, 6, 2, tmp);
-		sprintf(screenCenter[0], screenCenterTemplate[0], tmp);
+		dtostrf(adcAccumlator, 4, 1, tempFromMCP);
+
+		sprintf(screenCenter[0], screenCenterTemplate[0], tempFromMCP);
+		char znaki[3] = { 0xDF, 'C' };
+		strcat(screenCenter[0], znaki);
 		isChanged = 1;
 		adcAccumlator = 0;
 		sampleNo = 0;
@@ -395,7 +416,7 @@ int main(void) {
 	wdt_enable(WDTO_1S);
 	/* Even if you don't use the watchdog, turn it off here. On newer devices,
 	 * the status of the watchdog (on/off, period) is PRESERVED OVER RESET!
- 	 * RESET status: all port bits are inputs without pull-up.
+	 * RESET status: all port bits are inputs without pull-up.
 	 * That's the way we need D+ and D-. Therefore we don't need any
 	 * additional hardware initialization.
 	 */
@@ -419,23 +440,22 @@ int main(void) {
 	//LCD_WriteText("SMiW 2011/2012");
 	//LCD_GoTo(center("Marcin Jabrzyk"), 2);
 	//LCD_WriteText("Marcin Jabrzyk");
-
 	irmp_init(); //IR libary
 	timer_init(); //IR timmer and ADC starter
 	adc_init(); //ADC configuration
 
 	cli();
 	intro = 0;
-	if(RFM70_Initialize(0,(uint8_t*)"Smiw2")){
-			LCD_GoTo(center("Init RFM70"), 2);
-			LCD_WriteText("Init RFM70");
-			_delay_ms(100);
+	if (RFM70_Initialize(0, (uint8_t*) "Smiw2")) {
+		LCD_GoTo(center("Init RFM70"), 2);
+		LCD_WriteText("Init RFM70");
+		_delay_ms(100);
 	} else {
 		LCD_GoTo(center("ERR init RFM70"), 1);
 		LCD_WriteText("ERR init RFM70");
 	}
 
-	if (RFM70_Present()){
+	if (RFM70_Present()) {
 		LCD_GoTo(center("RFM70 present"), 3);
 		LCD_WriteText("RFM70 present");
 	} else {
@@ -448,43 +468,52 @@ int main(void) {
 		wdt_reset();
 		usbPoll();
 
-
-		if (RFM70_Present()){
-			sprintf(screenDebug[0],screenDebugTemplate[0], "OK");
+		if (RFM70_Present()) {
+			sprintf(screenDebug[0], screenDebugTemplate[0], "OK");
 		} else {
-			sprintf(screenDebug[0],screenDebugTemplate[0], "ERROR");
+			sprintf(screenDebug[0], screenDebugTemplate[0], "ERROR");
 		}
 
-		if (Carrier_Detected()){
-			sprintf(screenDebug[1],screenDebugTemplate[1], "OK");
+		if (Carrier_Detected()) {
+			sprintf(screenDebug[1], screenDebugTemplate[1], "OK");
 			carrierErrorCount = 0;
 		} else {
 			carrierErrorCount++;
 		}
 
-		if (carrierErrorCount >50){
-			sprintf(screenDebug[1],screenDebugTemplate[1], "NONE");
+		if (carrierErrorCount > 50) {
+			sprintf(screenDebug[1], screenDebugTemplate[1], "NONE");
 		}
 
-
-		strcpy(screenCenter[2], " ");
-		strcpy(screenCenter[3], " ");
+		char* _tempGrzejnik;
 		if (Packet_Received()) {
-			sprintf(screenDebug[2],screenDebugTemplate[2], "OK");
+			sprintf(screenDebug[2], screenDebugTemplate[2], "OK");
 			Receive_Packet(message);
-			sprintf(screenCenter[1], screenCenterTemplate[1], message);
-			//strcat(screenCenter[3], message);
+
+			//if from grzejnik starts with "a" else from piec
+			_tempGrzejnik = strchr(message, 'a');
+
+			if (_tempGrzejnik != NULL ) {
+				strncpy(tempFromGrzejnik, _tempGrzejnik, 4);
+				sprintf(screenCenter[2], screenCenterTemplate[2],
+						_tempGrzejnik);
+			} else {
+				strncpy(tempFromPiec, message, 4);
+				sprintf(screenCenter[1], screenCenterTemplate[1], message);
+			}
+
 			reciveErrorCount = 0;
 		} else {
 			reciveErrorCount++;
 		}
-		if (reciveErrorCount > 90){
-			sprintf(screenDebug[2],screenDebugTemplate[2], "WAIT");
+		if (reciveErrorCount > 90) {
+			sprintf(screenDebug[2], screenDebugTemplate[2], "WAIT");
 		}
 
 		if (irmp_get_data(&irmp_data)) { // When IR decodes a new key presed.
 			lastKey = irmp_data.command; //Save the key
-			itoa(irmp_data.command, screenCenter[3], 10); //Convert it to string
+			itoa(irmp_data.command, lastKeyStr, 10); //Convert it to string
+			sprintf(screenCenter[3], screenCenterTemplate[3], lastKeyStr);
 			isChanged = 1;
 			intro = 0;
 		}
@@ -494,7 +523,7 @@ int main(void) {
 				printScreenWithCenter(screenLeft);
 				break; //CH-
 			case 70:
-				printScreenWithCenter(screenCenter);
+				printScreen(screenCenter);
 				break; //CH
 			case 71:
 				printScreenWithCenter(screenRight);
@@ -503,7 +532,7 @@ int main(void) {
 				printScreen(screenDebug);
 				break;
 			default:
-				printScreenWithCenter(screenCenter);
+				printScreen(screenCenter);
 				break; //Any other key
 			}
 		}
