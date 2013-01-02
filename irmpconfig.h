@@ -88,10 +88,10 @@
 #define IRMP_PIN                                PIN_B4                  // use PB4 as IR input on PIC
 
 #else                                                                   // AVR:
-#define IRMP_PORT                               PORTD
-#define IRMP_DDR                                DDRD
-#define IRMP_PIN                                PIND
-#define IRMP_BIT                                PD3                       // use PB6 as IR input on AVR
+#define IRMP_PORT                               PORTB
+#define IRMP_DDR                                DDRB
+#define IRMP_PIN                                PINB
+#define IRMP_BIT                                PB0                       // use PB6 as IR input on AVR
 #define input(x)                                ((x) & (1 << IRMP_BIT))
 #endif
 

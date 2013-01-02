@@ -69,7 +69,7 @@ static uchar lineNo;
 
 static char screenLeft[4][17] = { "Ekran Lewy", "-", "-", "-" };
 static const char screenCenterTemplate[4][17] = { "Ten:     %s", "Piec:    %s",
-		"Grzej:    %s", "Przycisk:    %s" };
+		"Grzej:  %s", "Przycisk:    %s" };
 static char screenCenter[4][17] = { "Ten:   ", "Piec:    ", "Grzej: ",
 		"Przycisk:    " };
 static char screenRight[4][17] = { "Ekran Prawy", "-", "-", "-" };
@@ -84,6 +84,27 @@ static char tempFromMCP[10];
 static char tempFromPiec[10];
 static char tempFromGrzejnik[10];
 static char lastKeyStr[4];
+
+
+void copyToScreen(uchar *data, uchar len, char screenLine[17], uchar addr) {
+	static uchar i;
+	if (addr == 1) { //Left part
+		for (i = 0; i < len; i++) {
+			screenLine[i] = data[i];
+		}
+		isChanged = 1;
+		//return;
+	}
+	if (addr == 2) { //Right part
+		for (i = 0; i < len; i++) {
+			screenLine[8 + i] = data[i];
+		}
+		screenLine[16] = '\0';
+		isChanged = 1;
+		//return;
+	}
+
+}
 
 /* ------------------------------------------------------------------------- */
 
@@ -273,26 +294,6 @@ usbMsgLen_t usbFunctionSetup(uchar data[8]) {
 
 /* ------------------------------------------------------------------------- */
 
-void copyToScreen(uchar *data, uchar len, char screenLine[17], uchar addr) {
-	static uchar i;
-	if (addr == 1) { //Left part
-		for (i = 0; i < len; i++) {
-			screenLine[i] = data[i];
-		}
-		isChanged = 1;
-		//return;
-	}
-	if (addr == 2) { //Right part
-		for (i = 0; i < len; i++) {
-			screenLine[8 + i] = data[i];
-		}
-		screenLine[16] = '\0';
-		isChanged = 1;
-		//return;
-	}
-
-}
-
 /* main functions for irmp */
 void timer_init(void) {
 	/* IR polling timer */
@@ -337,7 +338,7 @@ void TIMER1_COMPA_vect(void) {
 /*ADC interput handler.*/
 void ADC_vect(void) __attribute__((interrupt));
 void ADC_vect(void) {
-#define VOLTS_PER_BIT    0.00505 // 5.18/1024 = 0 | 0,00488 for 5V
+#define VOLTS_PER_BIT    0.00410 // 4.20/1024 = 0.00410 0.00505 // 5.18/1024 = 0 | 0,00488 for 5V
 #define ZERO_C_VOLTS     0.50000
 #define MV_PER_DEGREE_C  0.01000
 	static int sampleNo;
@@ -369,6 +370,8 @@ void ADC_vect(void) {
 		sampleNo = 0;
 	}
 }
+
+
 /* ------------------------------------------------------------------------- */
 unsigned char center(char* string) {
 	uint8_t len = strlen(string);
@@ -463,6 +466,12 @@ int main(void) {
 		LCD_WriteText("RFM70 not present");
 	}
 
+
+	/*
+	 * Prawodopodbnie któras z biblotek nieporpawnie inicjalizowa³a porty.
+	 * I ustawia³a PB0 jako wyjcie. Kiedy ma byc wejsciem odbiornika podczerwienii.
+	 */
+	DDRB &= ~(1 << PB0);
 	sei();
 	for (;;) { /* main event loop */
 		wdt_reset();
@@ -511,12 +520,22 @@ int main(void) {
 		}
 
 		if (irmp_get_data(&irmp_data)) { // When IR decodes a new key presed.
+			//sprintf(screenCenter[1], screenCenterTemplate[1], "JESTEM");
+
 			lastKey = irmp_data.command; //Save the key
+			//itoa(irmp_data.protocol, lastKeyStr, 10); //Convert it to string
+			//sprintf(screenCenter[2], screenCenterTemplate[2], lastKeyStr);
+
 			itoa(irmp_data.command, lastKeyStr, 10); //Convert it to string
 			sprintf(screenCenter[3], screenCenterTemplate[3], lastKeyStr);
 			isChanged = 1;
 			intro = 0;
+			//printScreen(screenCenter);
+
+			//_delay_ms(100);
+
 		}
+		//sprintf(screenCenter[1], screenCenterTemplate[1], "NIE MA");//
 		if (intro == 0) {
 			switch (lastKey) { //Change the view
 			case 69:
