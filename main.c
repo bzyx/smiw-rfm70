@@ -110,7 +110,8 @@ void copyToScreen(uchar *data, uchar len, char screenLine[17], uchar addr) {
 
 /* usbFunctionRead() is called when the host requests a chunk of data from
  * the device. For more information see the documentation in usbdrv/usbdrv.h.
- */uchar usbFunctionRead(uchar *data, uchar len) {
+ */
+uchar usbFunctionRead(uchar *data, uchar len) {
 	uchar i;
 
 	if (len > bytesRemaining) {
@@ -325,8 +326,7 @@ void adc_init(void) {
 
 void TIMER1_COMPA_vect(void) __attribute__((interrupt));
 void TIMER1_COMPA_vect(void) {
-	/* main functions for irmp
-	 */
+	/* main functions for irmp */
 	irmp_ISR(); // call irmp ISR
 	if ((intCount++ % 512) == 0) {
 		ADCSRA |= (1 << ADSC);
@@ -520,12 +520,7 @@ int main(void) {
 		}
 
 		if (irmp_get_data(&irmp_data)) { // When IR decodes a new key presed.
-			//sprintf(screenCenter[1], screenCenterTemplate[1], "JESTEM");
-
 			lastKey = irmp_data.command; //Save the key
-			//itoa(irmp_data.protocol, lastKeyStr, 10); //Convert it to string
-			//sprintf(screenCenter[2], screenCenterTemplate[2], lastKeyStr);
-
 			itoa(irmp_data.command, lastKeyStr, 10); //Convert it to string
 			sprintf(screenCenter[3], screenCenterTemplate[3], lastKeyStr);
 			isChanged = 1;
@@ -535,7 +530,6 @@ int main(void) {
 			//_delay_ms(100);
 
 		}
-		//sprintf(screenCenter[1], screenCenterTemplate[1], "NIE MA");//
 		if (intro == 0) {
 			switch (lastKey) { //Change the view
 			case 69:
