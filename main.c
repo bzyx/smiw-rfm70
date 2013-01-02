@@ -525,10 +525,6 @@ int main(void) {
 			sprintf(screenCenter[3], screenCenterTemplate[3], lastKeyStr);
 			isChanged = 1;
 			intro = 0;
-			//printScreen(screenCenter);
-
-			//_delay_ms(100);
-
 		}
 		if (intro == 0) {
 			switch (lastKey) { //Change the view
