@@ -1689,6 +1689,7 @@ irmp_get_data (IRMP_DATA * irmp_data_p)
 #endif
             default:
                 rtc = TRUE;
+
         }
 
         if (rtc)

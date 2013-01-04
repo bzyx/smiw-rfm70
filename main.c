@@ -35,6 +35,8 @@
 #include "irmpconfig.h"
 
 #include "RFM70.h"
+#include "protocol-active.h"
+
 /* ------------------------------------------------------------------------- */
 /* ----------------------------- USB interface ----------------------------- */
 /* ------------------------------------------------------------------------- */
@@ -80,6 +82,7 @@ static char screenDebug[4][17] =
 
 static int intCount = 0;
 static char message[32] = "";
+static char bufor[32] = "";
 static char tempFromMCP[10];
 static char tempFromPiec[10];
 static char tempFromGrzejnik[10];
@@ -363,7 +366,7 @@ void ADC_vect(void) {
 		dtostrf(adcAccumlator, 4, 1, tempFromMCP);
 
 		sprintf(screenCenter[0], screenCenterTemplate[0], tempFromMCP);
-		char znaki[3] = { 0xDF, 'C' };
+		char znaki[4] = { 0xDF, 'C', '\0' };
 		strcat(screenCenter[0], znaki);
 		isChanged = 1;
 		adcAccumlator = 0;
@@ -415,6 +418,9 @@ int main(void) {
 	int intro = 1;
 	static char reciveErrorCount = 0;
 	static char carrierErrorCount = 0;
+	static uint8_t nodeIndex = 0;
+	static uint8_t currentFuncId = 1;
+	command_t commandStruct;
 
 	wdt_enable(WDTO_1S);
 	/* Even if you don't use the watchdog, turn it off here. On newer devices,
@@ -494,7 +500,10 @@ int main(void) {
 			sprintf(screenDebug[1], screenDebugTemplate[1], "NONE");
 		}
 
-		char* _tempGrzejnik;
+		/*
+		 * TAK BY£O
+		 *
+		 * char* _tempGrzejnik;
 		if (Packet_Received()) {
 			sprintf(screenDebug[2], screenDebugTemplate[2], "OK");
 			Receive_Packet(message);
@@ -503,12 +512,16 @@ int main(void) {
 			_tempGrzejnik = strchr(message, 'a');
 
 			if (_tempGrzejnik != NULL ) {
-				strncpy(tempFromGrzejnik, _tempGrzejnik, 4);
+				strncpy(tempFromGrzejnik, _tempGrzejnik, 7);
+				tempFromGrzejnik[7] = '\0';
+				//sprintf(screenCenter[2], screenCenterTemplate[2],
+				//		_tempGrzejnik);
 				sprintf(screenCenter[2], screenCenterTemplate[2],
-						_tempGrzejnik);
+						tempFromGrzejnik);
 			} else {
 				strncpy(tempFromPiec, message, 4);
-				sprintf(screenCenter[1], screenCenterTemplate[1], message);
+				tempFromPiec[4] = '\0';
+				sprintf(screenCenter[1], screenCenterTemplate[1], tempFromPiec);
 			}
 
 			reciveErrorCount = 0;
@@ -517,7 +530,44 @@ int main(void) {
 		}
 		if (reciveErrorCount > 90) {
 			sprintf(screenDebug[2], screenDebugTemplate[2], "WAIT");
+		}*/
+
+	    clearCommand(&commandStruct);
+	    if (currentFuncId <= 1)
+	    	setCommandValues(&commandStruct,ACTIVE_NODES_ID[nodeIndex],currentFuncId,"read");
+	    else
+	    	setCommandValues(&commandStruct,ACTIVE_NODES_ID[nodeIndex],currentFuncId,"00.00"); //TODO: tu bêdzie ustawienie wart.
+
+	    encodeMessage(&commandStruct, &bufor);
+	    //sprintf(screenCenter[1], "%s", "                ");
+	    sprintf(screenCenter[1], "%s", bufor);
+	    Send_Packet(bufor, sizeof(bufor));
+	    _delay_ms(200);
+
+	    if (currentFuncId == 1)
+	    	currentFuncId = 50;
+
+	    if (currentFuncId == 52){
+	    	// Jesli ustawlismy wszystkie wartosci powinnismy zajac sie kolejnym ukladem
+	    	currentFuncId = 1;
+	    	nodeIndex = nodeIndex+1;
+	    	nodeIndex = nodeIndex %NODES_COUNT;
+	    } else {
+		    currentFuncId++;
+	    }
+
+
+	    if (Packet_Received()){
+	    	Receive_Packet(message);
+	    	snprintf(screenCenter[2], "%s", bufor, 16);
+	    	reciveErrorCount = 0;
+	    }  else {
+			reciveErrorCount++;
 		}
+
+	    if (reciveErrorCount > 90) {
+	    			sprintf(screenDebug[2], screenDebugTemplate[2], "WAIT");
+	    }
 
 		if (irmp_get_data(&irmp_data)) { // When IR decodes a new key presed.
 			lastKey = irmp_data.command; //Save the key
