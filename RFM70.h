@@ -13,7 +13,8 @@
 #include <stdint.h>     //for uint8_t
 #include <stdbool.h>    //for bool functions
 
-#define CE_BIT  PINB0   // Chip Enable
+#define CE_BIT  PB1   // Chip Enable
+//#define CE_BIT  PB2   // Chip Enable
 #define CE_PORT PORTB
 #define CE_DDR  DDRB
 

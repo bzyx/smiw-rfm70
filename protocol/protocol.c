@@ -125,8 +125,8 @@ int decodeMessage(char* message, command_t* command){
     if(command->funcId == INVALID_FUNCTION_ID)
         command->error = -7;
 
-    if(_validateStringValue(command->value) != 0)
-        command->error = -8;
+    //if(_validateStringValue(command->value) != 0)
+    //    command->error = -8;
 
     return command->error;
 }
@@ -143,7 +143,7 @@ int encodeMessage(command_t* command, char* message){
 
     strcpy(message, "");
 
-    sprintf(message, "%02d;%02d;%s", command->nodeId, command->funcId, command->value);
+    sprintf(message, "%02d;%02d;%-10s", command->nodeId, command->funcId, command->value);
     //snprintf(message, BUFFER_LEN, "%02d;%02d;%s", command->nodeId, command->funcId, command->value);
 
     return 0;

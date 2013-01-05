@@ -37,6 +37,8 @@
 #include "RFM70.h"
 #include "protocol-active.h"
 
+#define HOW_OFTEN 8
+
 /* ------------------------------------------------------------------------- */
 /* ----------------------------- USB interface ----------------------------- */
 /* ------------------------------------------------------------------------- */
@@ -420,9 +422,14 @@ int main(void) {
 	static char carrierErrorCount = 0;
 	static uint8_t nodeIndex = 0;
 	static uint8_t currentFuncId = 1;
-	command_t commandStruct;
+	static int ShouldSentSth = HOW_OFTEN;
+	static int retVal;
+	static int stop = 1;
+	static bool recv = false;
+	static command_t commandStruct;
 
 	wdt_enable(WDTO_1S);
+	//wdt_enable(WDTO_8S);
 	/* Even if you don't use the watchdog, turn it off here. On newer devices,
 	 * the status of the watchdog (on/off, period) is PRESERVED OVER RESET!
 	 * RESET status: all port bits are inputs without pull-up.
@@ -458,18 +465,24 @@ int main(void) {
 	if (RFM70_Initialize(0, (uint8_t*) "Smiw2")) {
 		LCD_GoTo(center("Init RFM70"), 2);
 		LCD_WriteText("Init RFM70");
-		_delay_ms(100);
+		//_delay_ms(100);
 	} else {
 		LCD_GoTo(center("ERR init RFM70"), 1);
 		LCD_WriteText("ERR init RFM70");
+		_delay_ms(100);
 	}
+
+	//_delay_ms(1000);
+	LCD_Clear();
 
 	if (RFM70_Present()) {
 		LCD_GoTo(center("RFM70 present"), 3);
 		LCD_WriteText("RFM70 present");
+		//_delay_ms(100);
 	} else {
 		LCD_GoTo(center("RFM70 not present"), 3);
 		LCD_WriteText("RFM70 not present");
+		_delay_ms(100);
 	}
 
 
@@ -483,12 +496,20 @@ int main(void) {
 		wdt_reset();
 		usbPoll();
 
+		clearCommand(&commandStruct);
+		setCommandValues(&commandStruct,PIEC_NODE_ID,PIEC_READ_TEMP,"00.00");
+		encodeMessage(&commandStruct, bufor);
+		Send_Packet(bufor, strlen(bufor));
+		Select_RX_Mode();
+
+
 		if (RFM70_Present()) {
 			sprintf(screenDebug[0], screenDebugTemplate[0], "OK");
 		} else {
 			sprintf(screenDebug[0], screenDebugTemplate[0], "ERROR");
 		}
 
+		_delay_us(150);
 		if (Carrier_Detected()) {
 			sprintf(screenDebug[1], screenDebugTemplate[1], "OK");
 			carrierErrorCount = 0;
@@ -500,74 +521,8 @@ int main(void) {
 			sprintf(screenDebug[1], screenDebugTemplate[1], "NONE");
 		}
 
-		/*
-		 * TAK BY£O
-		 *
-		 * char* _tempGrzejnik;
-		if (Packet_Received()) {
-			sprintf(screenDebug[2], screenDebugTemplate[2], "OK");
-			Receive_Packet(message);
-
-			//if from grzejnik starts with "a" else from piec
-			_tempGrzejnik = strchr(message, 'a');
-
-			if (_tempGrzejnik != NULL ) {
-				strncpy(tempFromGrzejnik, _tempGrzejnik, 7);
-				tempFromGrzejnik[7] = '\0';
-				//sprintf(screenCenter[2], screenCenterTemplate[2],
-				//		_tempGrzejnik);
-				sprintf(screenCenter[2], screenCenterTemplate[2],
-						tempFromGrzejnik);
-			} else {
-				strncpy(tempFromPiec, message, 4);
-				tempFromPiec[4] = '\0';
-				sprintf(screenCenter[1], screenCenterTemplate[1], tempFromPiec);
-			}
-
-			reciveErrorCount = 0;
-		} else {
-			reciveErrorCount++;
-		}
-		if (reciveErrorCount > 90) {
-			sprintf(screenDebug[2], screenDebugTemplate[2], "WAIT");
-		}*/
-
-	    clearCommand(&commandStruct);
-	    if (currentFuncId <= 1)
-	    	setCommandValues(&commandStruct,ACTIVE_NODES_ID[nodeIndex],currentFuncId,"read");
-	    else
-	    	setCommandValues(&commandStruct,ACTIVE_NODES_ID[nodeIndex],currentFuncId,"00.00"); //TODO: tu bêdzie ustawienie wart.
-
-	    encodeMessage(&commandStruct, &bufor);
-	    //sprintf(screenCenter[1], "%s", "                ");
-	    sprintf(screenCenter[1], "%s", bufor);
-	    Send_Packet(bufor, sizeof(bufor));
-	    _delay_ms(200);
-
-	    if (currentFuncId == 1)
-	    	currentFuncId = 50;
-
-	    if (currentFuncId == 52){
-	    	// Jesli ustawlismy wszystkie wartosci powinnismy zajac sie kolejnym ukladem
-	    	currentFuncId = 1;
-	    	nodeIndex = nodeIndex+1;
-	    	nodeIndex = nodeIndex %NODES_COUNT;
-	    } else {
-		    currentFuncId++;
-	    }
-
-
-	    if (Packet_Received()){
-	    	Receive_Packet(message);
-	    	snprintf(screenCenter[2], "%s", bufor, 16);
-	    	reciveErrorCount = 0;
-	    }  else {
-			reciveErrorCount++;
-		}
-
-	    if (reciveErrorCount > 90) {
-	    			sprintf(screenDebug[2], screenDebugTemplate[2], "WAIT");
-	    }
+		wdt_reset();
+		usbPoll();
 
 		if (irmp_get_data(&irmp_data)) { // When IR decodes a new key presed.
 			lastKey = irmp_data.command; //Save the key
@@ -576,6 +531,65 @@ int main(void) {
 			isChanged = 1;
 			intro = 0;
 		}
+
+		//wdt_reset();
+		//usbPoll();
+
+		//cli();
+		recv = Packet_Received();
+		//sei();
+		while( ( recv == false) || (stop == 0) ){
+			//cli();
+			Select_RX_Mode();
+			_delay_ms(1);
+			recv = Packet_Received();
+			//sei();
+	    	stop++;
+
+	    	if (stop % 128){
+	    		wdt_reset();
+	    		usbPoll();
+	    	}
+
+	    	if (stop > 1024){
+	    		stop = 0;
+	    		break;
+	    	}
+
+	    	LCD_GoTo(0,3);
+	    	itoa(stop, bufor, 10);
+	    	sprintf(message, "%d  B: %d", stop, recv);
+	    	LCD_WriteText(message);
+	    }
+
+		wdt_reset();
+		usbPoll();
+
+	    if (recv == true){
+			//wdt_reset();
+			//usbPoll();
+	    	stop = 1;
+	    	Receive_Packet(message);
+	    	decodeMessage(message, &commandStruct);
+	    		strncpy(bufor, commandStruct.value, 10);
+	    		bufor[10]='\0';
+	    		sprintf(screenCenter[2], screenCenterTemplate[2], bufor);
+	    		isChanged = 1;
+			//wdt_reset();
+			//usbPoll();
+	    	//_delay_ms(250);
+
+	    	reciveErrorCount = 0;
+	    }  else {
+			reciveErrorCount++;
+		}
+		//wdt_reset();
+		//usbPoll();
+
+	    if (reciveErrorCount > 90) {
+	    			sprintf(screenDebug[2], screenDebugTemplate[2], "WAIT");
+	    }
+
 		if (intro == 0) {
 			switch (lastKey) { //Change the view
 			case 69:
@@ -595,7 +609,9 @@ int main(void) {
 				break; //Any other key
 			}
 		}
+		wdt_reset();
 		usbPoll();
+
 	}
 	return 0;
 }

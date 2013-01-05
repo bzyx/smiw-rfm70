@@ -13,10 +13,12 @@
 #include <stdint.h>     //for uint8_t
 
 
-#define SCK_BIT  PINB5
-#define MISO_BIT PINB4
-#define MOSI_BIT PINB3
-#define SSN_BIT  PINB2  //SSN/CSN (Slave Select Not / CSN Chip Select Not)
+#define SCK_BIT  PB5
+#define MISO_BIT PB4
+#define MOSI_BIT PB3
+#define SSN_BIT  PB2  //SSN/CSN (Slave Select Not / CSN Chip Select Not)
+//#define SSN_BIT  PB1
+
 #define SPI_DDR  DDRB
 #define SPI_PORT PORTB
 
