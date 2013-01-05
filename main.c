@@ -19,6 +19,7 @@
 #include <avr/wdt.h>
 #include <avr/interrupt.h>  /* for sei() */
 #include <util/delay.h>     /* for _delay_ms() */
+#include <avr/pgmspace.h>   /* required by usbdrv.h */
 #include <avr/eeprom.h>
 #include <inttypes.h>
 #include <stdlib.h>
@@ -26,18 +27,15 @@
 #include <string.h>
 #include <stdio.h>
 
-#include <avr/pgmspace.h>   /* required by usbdrv.h */
-#include "usbdrv/usbdrv.h"
-#include "usbdrv/oddebug.h"
-
 #include "hd44780.h"
 #include "irmp.h"
 #include "irmpconfig.h"
-
 #include "RFM70.h"
+#include "LCD_Utils.h"
+#include "Screen_Defs.h"
+
 #include "protocol-active.h"
 
-#define HOW_OFTEN 8
 
 /* ------------------------------------------------------------------------- */
 /* ----------------------------- USB interface ----------------------------- */
@@ -55,63 +53,33 @@ PROGMEM char usbHidReportDescriptor[22] = { /* USB report descriptor */
 		0xb2, 0x02, 0x01, //   FEATURE (Data,Var,Abs,Buf)
 		0xc0 // END_COLLECTION
 		};
+
 /* Since we define only one feature report, we don't use report-IDs (which
  * would be the first byte of the report). The entire report consists of 128
  * opaque data bytes.
  */
 
 /* The following variables store the status of the current data transfer */
-static uchar bytesRemaining;
-
 static IRMP_DATA irmp_data;
-static uint8_t isChanged = 1;
 
 //static double adcVal;
 float adcVal;
 static int lastKey;
-static uchar lineNo;
-
-static char screenLeft[4][17] = { "Ekran Lewy", "-", "-", "-" };
-static const char screenCenterTemplate[4][17] = { "Ten:     %s", "Piec:    %s",
-		"Grzej:  %s", "Przycisk:    %s" };
-static char screenCenter[4][17] = { "Ten:   ", "Piec:    ", "Grzej: ",
-		"Przycisk:    " };
-static char screenRight[4][17] = { "Ekran Prawy", "-", "-", "-" };
-static const char screenDebugTemplate[4][17] = { "Stan RFM: %s", "Nosna: %s",
-		"Odbior: %s", "" };
-static char screenDebug[4][17] =
-		{ "Stan RFM: %s", "Nosna: %s", "Odbior: %s", "" };
 
 static int intCount = 0;
 static char message[32] = "";
 static char bufor[32] = "";
-static char tempFromMCP[10];
+int intro = 1;
+
+static uchar bytesRemaining;
 static char tempFromPiec[10];
 static char tempFromGrzejnik[10];
 static char lastKeyStr[4];
+static uchar lineNo;
+static char tempFromMCP[10];
+char znaki[4] = { 0xDF, 'C', '\0' };
 
 
-void copyToScreen(uchar *data, uchar len, char screenLine[17], uchar addr) {
-	static uchar i;
-	if (addr == 1) { //Left part
-		for (i = 0; i < len; i++) {
-			screenLine[i] = data[i];
-		}
-		isChanged = 1;
-		//return;
-	}
-	if (addr == 2) { //Right part
-		for (i = 0; i < len; i++) {
-			screenLine[8 + i] = data[i];
-		}
-		screenLine[16] = '\0';
-		isChanged = 1;
-		//return;
-	}
-
-}
-
-/* ------------------------------------------------------------------------- */
 
 /* usbFunctionRead() is called when the host requests a chunk of data from
  * the device. For more information see the documentation in usbdrv/usbdrv.h.
@@ -144,7 +112,8 @@ uchar usbFunctionRead(uchar *data, uchar len) {
 
 /* usbFunctionWrite() is called when the host sends a chunk of data to the
  * device. For more information see the documentation in usbdrv/usbdrv.h.
- */uchar usbFunctionWrite(uchar *data, uchar len) {
+ */
+uchar usbFunctionWrite(uchar *data, uchar len) {
 	static uchar myAdres;
 
 	if (len > bytesRemaining) // if this is the last incomplete chunk
@@ -298,7 +267,6 @@ usbMsgLen_t usbFunctionSetup(uchar data[8]) {
 	return 0;
 }
 
-/* ------------------------------------------------------------------------- */
 
 /* main functions for irmp */
 void timer_init(void) {
@@ -367,63 +335,77 @@ void ADC_vect(void) {
 		//dtostrf(adcAccumlator, 6, 2, screenCenter[1]);
 		dtostrf(adcAccumlator, 4, 1, tempFromMCP);
 
-		sprintf(screenCenter[0], screenCenterTemplate[0], tempFromMCP);
-		char znaki[4] = { 0xDF, 'C', '\0' };
-		strcat(screenCenter[0], znaki);
+		sprintf(screenCenter[3], screenCenterTemplate[3], tempFromMCP);
+		//strcat(screenCenter[0], znaki);
 		isChanged = 1;
 		adcAccumlator = 0;
 		sampleNo = 0;
 	}
 }
 
-
-/* ------------------------------------------------------------------------- */
-unsigned char center(char* string) {
-	uint8_t len = strlen(string);
-	len = 16 - len;
-	len /= 2;
-	return len;
-}
-
-void printScreenWithCenter(char screen[4][17]) {
-	if (isChanged == 1) {
-		LCD_Clear();
-		isChanged = 0;
+void valueToScreen(command_t* command){
+	char tmp[10];
+	strncpy(tmp, command->value, 5);
+	tmp[5] = '\0';
+	if (command->nodeId == GRZEJNIK_NODE_ID){
+		if(command->funcId == GRZEJNIK_READ_TEMP){;
+			sprintf(screenLeft[1], screenLeftTemplate[1],tmp);
+	    	isChanged = 1;
+		}
 	}
-	LCD_GoTo(center(screen[0]), 0);
-	LCD_WriteText(screen[0]);
-	LCD_GoTo(center(screen[1]), 1);
-	LCD_WriteText(screen[1]);
-	LCD_GoTo(center(screen[2]), 2);
-	LCD_WriteText(screen[2]);
-	LCD_GoTo(center(screen[3]), 3);
-	LCD_WriteText(screen[3]);
+
+	if (command->nodeId == PIEC_NODE_ID){
+			if(command->funcId == PIEC_READ_TEMP){;
+				sprintf(screenRight[1], screenRightTemplate[1],tmp);
+		    	isChanged = 1;
+			}
+		}
+
 }
 
-void printScreen(char screen[4][17]) {
-	if (isChanged == 1) {
-		LCD_Clear();
-		isChanged = 0;
+void IRrecAndUpdateScreen(){
+	char oldLastKey = lastKey;
+	if (irmp_get_data(&irmp_data)) { // When IR decodes a new key presed.
+		lastKey = irmp_data.command; //Save the key
+		if (lastKey != 82){
+			itoa(oldLastKey, lastKeyStr, 10); //Convert it to string
+			isChanged = 1;
+		}
+		//sprintf(screenCenter[3], screenCenterTemplate[3], lastKeyStr);
+		isChanged = 1;
+		intro = 0;
 	}
-	LCD_GoTo(0, 0);
-	LCD_WriteText(screen[0]);
-	LCD_GoTo(0, 1);
-	LCD_WriteText(screen[1]);
-	LCD_GoTo(0, 2);
-	LCD_WriteText(screen[2]);
-	LCD_GoTo(0, 3);
-	LCD_WriteText(screen[3]);
+
+	if(oldLastKey != lastKey){
+		LCD_Clear();
+	}
+
+	if (intro == 0) {
+		switch (lastKey) { //Change the view
+		case 69:
+			printScreen(screenLeft);
+			break; //CH-
+		case 70:
+			printScreen(screenCenter);
+			break; //CH
+		case 71:
+			printScreen(screenRight);
+			break; //CH+
+		case 82:
+			printScreen(screenDebug);
+			break;
+		default:
+			printScreen(screenCenter);
+			break; //Any other key
+		}
+	}
 }
+
 
 int main(void) {
 	uchar i;
-	int intro = 1;
 	static char reciveErrorCount = 0;
 	static char carrierErrorCount = 0;
-	static uint8_t nodeIndex = 0;
-	static uint8_t currentFuncId = 1;
-	static int ShouldSentSth = HOW_OFTEN;
-	static int retVal;
 	static int stop = 1;
 	static bool recv = false;
 	static command_t commandStruct;
@@ -502,36 +484,33 @@ int main(void) {
 		Send_Packet(bufor, strlen(bufor));
 		Select_RX_Mode();
 
-
 		if (RFM70_Present()) {
-			sprintf(screenDebug[0], screenDebugTemplate[0], "OK");
+			sprintf(screenDebug[0], screenDebugTemplate[0], "OK", lastKeyStr);
 		} else {
-			sprintf(screenDebug[0], screenDebugTemplate[0], "ERROR");
+			sprintf(screenDebug[0], screenDebugTemplate[0], "ER", lastKeyStr);
 		}
 
-		_delay_us(150);
-		if (Carrier_Detected()) {
+		if (Carrier_Detected() == true) {
 			sprintf(screenDebug[1], screenDebugTemplate[1], "OK");
 			carrierErrorCount = 0;
 		} else {
 			carrierErrorCount++;
 		}
-
 		if (carrierErrorCount > 50) {
 			sprintf(screenDebug[1], screenDebugTemplate[1], "NONE");
 		}
 
+
+	    if (reciveErrorCount > 90) {
+	    			sprintf(screenDebug[2], screenDebugTemplate[2], "WAIT");
+	    } else {
+	    	sprintf(screenDebug[2], screenDebugTemplate[2], "OK");
+	    }
+
 		wdt_reset();
 		usbPoll();
 
-		if (irmp_get_data(&irmp_data)) { // When IR decodes a new key presed.
-			lastKey = irmp_data.command; //Save the key
-			itoa(irmp_data.command, lastKeyStr, 10); //Convert it to string
-			sprintf(screenCenter[3], screenCenterTemplate[3], lastKeyStr);
-			isChanged = 1;
-			intro = 0;
-		}
-
+		IRrecAndUpdateScreen();
 		//wdt_reset();
 		//usbPoll();
 
@@ -541,10 +520,14 @@ int main(void) {
 		while( ( recv == false) || (stop == 0) ){
 			//cli();
 			Select_RX_Mode();
-			_delay_ms(1);
+			_delay_ms(1.5);
 			recv = Packet_Received();
 			//sei();
 	    	stop++;
+
+	    	if (stop%32){
+	    		IRrecAndUpdateScreen();
+	    	}
 
 	    	if (stop % 128){
 	    		wdt_reset();
@@ -556,10 +539,9 @@ int main(void) {
 	    		break;
 	    	}
 
-	    	LCD_GoTo(0,3);
 	    	itoa(stop, bufor, 10);
-	    	sprintf(message, "%d  B: %d", stop, recv);
-	    	LCD_WriteText(message);
+	    	sprintf(message, "B:%.1d %4d",recv, stop);
+	    	sprintf(screenDebug[3], screenDebugTemplate[3], message);
 	    }
 
 		wdt_reset();
@@ -571,10 +553,7 @@ int main(void) {
 	    	stop = 1;
 	    	Receive_Packet(message);
 	    	decodeMessage(message, &commandStruct);
-	    		strncpy(bufor, commandStruct.value, 10);
-	    		bufor[10]='\0';
-	    		sprintf(screenCenter[2], screenCenterTemplate[2], bufor);
-	    		isChanged = 1;
+	    	valueToScreen(&commandStruct);
 			//wdt_reset();
 			//usbPoll();
 	    	//_delay_ms(250);
@@ -586,34 +565,9 @@ int main(void) {
 		//wdt_reset();
 		//usbPoll();
 
-	    if (reciveErrorCount > 90) {
-	    			sprintf(screenDebug[2], screenDebugTemplate[2], "WAIT");
-	    }
-
-		if (intro == 0) {
-			switch (lastKey) { //Change the view
-			case 69:
-				printScreenWithCenter(screenLeft);
-				break; //CH-
-			case 70:
-				printScreen(screenCenter);
-				break; //CH
-			case 71:
-				printScreenWithCenter(screenRight);
-				break; //CH+
-			case 82:
-				printScreen(screenDebug);
-				break;
-			default:
-				printScreen(screenCenter);
-				break; //Any other key
-			}
-		}
 		wdt_reset();
 		usbPoll();
 
 	}
 	return 0;
 }
-
-/* ------------------------------------------------------------------------- */
