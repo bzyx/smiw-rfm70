@@ -36,7 +36,6 @@
 
 #include "protocol-active.h"
 
-
 /* ------------------------------------------------------------------------- */
 /* ----------------------------- USB interface ----------------------------- */
 /* ------------------------------------------------------------------------- */
@@ -61,6 +60,7 @@ PROGMEM char usbHidReportDescriptor[22] = { /* USB report descriptor */
 
 /* The following variables store the status of the current data transfer */
 static IRMP_DATA irmp_data;
+static command_t commandStruct;
 
 //static double adcVal;
 float adcVal;
@@ -72,26 +72,26 @@ static char bufor[32] = "";
 int intro = 1;
 
 static uchar bytesRemaining;
-static char tempFromPiec[10];
-static char tempFromGrzejnik[10];
+static char temperatureFromMCP[10];
+static char temperatureFromPiec[10];
+static char temperatureFromGrzejnik[10];
+static char temperatureFromUsbToGrzej[10];
+static char temperatureFromUsbToPiecWl[10];
+static char temperatureFromUsbToPiecWyl[10];
 static char lastKeyStr[4];
 static uchar lineNo;
-static char tempFromMCP[10];
 char znaki[4] = { 0xDF, 'C', '\0' };
-
-
 
 /* usbFunctionRead() is called when the host requests a chunk of data from
  * the device. For more information see the documentation in usbdrv/usbdrv.h.
- */
-uchar usbFunctionRead(uchar *data, uchar len) {
+ */uchar usbFunctionRead(uchar *data, uchar len) {
 	uchar i;
 
 	if (len > bytesRemaining) {
 		len = bytesRemaining;
 		//send temp3 + irKey
 		for (i = 0; i < 4; i++) {
-			data[i] = tempFromGrzejnik[i];
+			data[i] = temperatureFromGrzejnik[i];
 		}
 		for (i = 0; i < 2; i++) {
 			data[i + 4] = lastKeyStr[i];
@@ -99,10 +99,10 @@ uchar usbFunctionRead(uchar *data, uchar len) {
 	} else {
 		//send temp1 + temp2
 		for (i = 0; i < 4; i++) {
-			data[i] = tempFromMCP[i];
+			data[i] = temperatureFromMCP[i];
 		}
 		for (i = 0; i < 4; i++) {
-			data[i+4] = tempFromPiec[i];
+			data[i + 4] = temperatureFromPiec[i];
 		}
 		bytesRemaining -= len;
 
@@ -112,133 +112,47 @@ uchar usbFunctionRead(uchar *data, uchar len) {
 
 /* usbFunctionWrite() is called when the host sends a chunk of data to the
  * device. For more information see the documentation in usbdrv/usbdrv.h.
- */
-uchar usbFunctionWrite(uchar *data, uchar len) {
-	static uchar myAdres;
+ */uchar usbFunctionWrite(uchar *data, uchar len) {
 
 	if (len > bytesRemaining) // if this is the last incomplete chunk
 		len = bytesRemaining; // limit to the amount we can store
-	bytesRemaining -= len;
+	/* D³ugosc pakietu wykosi 16 bajtow, i jest dzielona na 2 po 8.
+	 * Poniewaz potrzebujemy tu 4 pierwszych bajtow mozemy pomnozyc x 2
+	 * ilosc przetworzonych danych. W ten sposob poinformujemy hosta
+	 * o zakoczeniu transmisji, mimo ze przeslal nam tylko 8 bajtow.
+	 */
+	bytesRemaining -= 2 * len;
 
 	if (lineNo == 0) {
 		lineNo = data[0];
-		myAdres = 1;
 		return bytesRemaining;
 	}
 
 	switch (lineNo) {
-	case 1: { //Screen left line 1
-		if (myAdres == 1) { //left part of string
-			copyToScreen(data, len, screenLeft[0], myAdres);
-			myAdres = 2;
-			return bytesRemaining;
-		}
-		if (myAdres == 2) {
-			copyToScreen(data, len, screenLeft[0], myAdres);
-			myAdres = 0;
-			lineNo = 0;
-			return bytesRemaining;
-		}
+	case 1: { // Grzejnik
+		strncpy(temperatureFromUsbToGrzej, data, 4);
+		lineNo = 0;
+		return bytesRemaining;
 	}
 		break;
-	case 2: { //Screen left line 2
-		if (myAdres == 1) { //left part of string
-			copyToScreen(data, len, screenLeft[1], myAdres);
-			myAdres = 2;
-			return bytesRemaining;
-		}
-		if (myAdres == 2) {
-			copyToScreen(data, len, screenLeft[1], myAdres);
-			myAdres = 0;
-			lineNo = 0;
-			return bytesRemaining;
-		}
+	case 2: { // Piec W³¹cz
+		strncpy(temperatureFromUsbToPiecWl, data, 4);
+		lineNo = 0;
+		return bytesRemaining;
 	}
 		break;
-	case 3: { //Screen left line 3
-		if (myAdres == 1) { //left part of string
-			copyToScreen(data, len, screenLeft[2], myAdres);
-			myAdres = 2;
-			return bytesRemaining;
-		}
-		if (myAdres == 2) {
-			copyToScreen(data, len, screenLeft[2], myAdres);
-			myAdres = 0;
-			lineNo = 0;
-			return bytesRemaining;
-		}
+	case 3: { // Piec Wy³¹cz
+		strncpy(temperatureFromUsbToPiecWyl, data, 4);
+		lineNo = 0;
+		return bytesRemaining;
 	}
 		break;
-	case 4: { //Screen left line 4
-		if (myAdres == 1) { //left part of string
-			copyToScreen(data, len, screenLeft[3], myAdres);
-			myAdres = 2;
-			return bytesRemaining;
-		}
-		if (myAdres == 2) {
-			copyToScreen(data, len, screenLeft[3], myAdres);
-			myAdres = 0;
-			lineNo = 0;
-			return bytesRemaining;
-		}
-	}
-		break;
-
-	case 5: { //Screen right line 1
-		if (myAdres == 1) { //left part of string
-			copyToScreen(data, len, screenRight[0], myAdres);
-			myAdres = 2;
-			return bytesRemaining;
-		}
-		if (myAdres == 2) {
-			copyToScreen(data, len, screenRight[0], myAdres);
-			myAdres = 0;
-			lineNo = 0;
-			return bytesRemaining;
-		}
-	}
-		break;
-	case 6: { //Screen right line 2
-		if (myAdres == 1) { //left part of string
-			copyToScreen(data, len, screenRight[1], myAdres);
-			myAdres = 2;
-			return bytesRemaining;
-		}
-		if (myAdres == 2) {
-			copyToScreen(data, len, screenRight[1], myAdres);
-			myAdres = 0;
-			lineNo = 0;
-			return bytesRemaining;
-		}
-	}
-		break;
-	case 7: { //Screen right line 3
-		if (myAdres == 1) { //left part of string
-			copyToScreen(data, len, screenRight[2], myAdres);
-			myAdres = 2;
-			return bytesRemaining;
-		}
-		if (myAdres == 2) {
-			copyToScreen(data, len, screenRight[2], myAdres);
-			myAdres = 0;
-			lineNo = 0;
-			return bytesRemaining;
-		}
-	}
-		break;
-	case 8: { //Screen right line 4
-		if (myAdres == 1) { //left part of string
-			copyToScreen(data, len, screenRight[3], myAdres);
-			myAdres = 2;
-			return bytesRemaining;
-		}
-		if (myAdres == 2) {
-			copyToScreen(data, len, screenRight[3], myAdres);
-			myAdres = 0;
-			lineNo = 0;
-			return bytesRemaining;
-		}
-	}
+	case 4:
+	case 5:
+	case 6:
+	case 7:
+	case 8:
+		return bytesRemaining;
 		break;
 	default:
 		break;
@@ -266,7 +180,6 @@ usbMsgLen_t usbFunctionSetup(uchar data[8]) {
 	}
 	return 0;
 }
-
 
 /* main functions for irmp */
 void timer_init(void) {
@@ -333,9 +246,9 @@ void ADC_vect(void) {
 	if (sampleNo == NOOFSAMLES) {
 		adcAccumlator /= NOOFSAMLES;
 		//dtostrf(adcAccumlator, 6, 2, screenCenter[1]);
-		dtostrf(adcAccumlator, 4, 1, tempFromMCP);
+		dtostrf(adcAccumlator, 4, 1, temperatureFromMCP);
 
-		sprintf(screenCenter[3], screenCenterTemplate[3], tempFromMCP);
+		sprintf(screenCenter[3], screenCenterTemplate[3], temperatureFromMCP);
 		//strcat(screenCenter[0], znaki);
 		isChanged = 1;
 		adcAccumlator = 0;
@@ -343,31 +256,56 @@ void ADC_vect(void) {
 	}
 }
 
-void valueToScreen(command_t* command){
+void valueToScreen(command_t* command) {
 	char tmp[10];
-	strncpy(tmp, command->value, 5);
-	tmp[5] = '\0';
-	if (command->nodeId == GRZEJNIK_NODE_ID){
-		if(command->funcId == GRZEJNIK_READ_TEMP){;
-			sprintf(screenLeft[1], screenLeftTemplate[1],tmp);
-	    	isChanged = 1;
+	strncpy(tmp, command->value, 4);
+	tmp[4] = '\0';
+	if (command->nodeId == GRZEJNIK_NODE_ID) {
+		if (command->funcId == GRZEJNIK_READ_TEMP) {
+			;
+			sprintf(screenLeft[1], screenLeftTemplate[1], tmp);
+			strcpy(temperatureFromGrzejnik, tmp);
+			isChanged = 1;
 		}
 	}
 
-	if (command->nodeId == PIEC_NODE_ID){
-			if(command->funcId == PIEC_READ_TEMP){;
-				sprintf(screenRight[1], screenRightTemplate[1],tmp);
-		    	isChanged = 1;
-			}
+	if (command->nodeId == PIEC_NODE_ID) {
+		if (command->funcId == PIEC_READ_TEMP) {
+			;
+			sprintf(screenRight[1], screenRightTemplate[1], tmp);
+			strcpy(temperatureFromPiec, tmp);
+			isChanged = 1;
 		}
+	}
 
 }
 
-void IRrecAndUpdateScreen(){
+void updateValuesFromUSB() {
+	if (temperatureFromUsbToGrzej != NULL ) {
+		temperatureFromUsbToGrzej[2] = '.';
+		sprintf(screenLeft[2], screenLeftTemplate[2],
+				temperatureFromUsbToGrzej);
+		isChanged = 1;
+	}
+	if (temperatureFromUsbToPiecWl != NULL ) {
+		temperatureFromUsbToPiecWl[2] = '.';
+		sprintf(screenRight[2], screenRightTemplate[2],
+				temperatureFromUsbToPiecWl);
+		isChanged = 1;
+	}
+	if (temperatureFromUsbToPiecWyl != NULL ) {
+		temperatureFromUsbToPiecWyl[2] = '.';
+		sprintf(screenRight[3], screenRightTemplate[3],
+				temperatureFromUsbToPiecWyl);
+		isChanged = 1;
+	}
+}
+
+void IRrecAndUpdateScreen() {
 	char oldLastKey = lastKey;
 	if (irmp_get_data(&irmp_data)) { // When IR decodes a new key presed.
 		lastKey = irmp_data.command; //Save the key
-		if (lastKey != 82){
+		if (lastKey != 82) {
 			itoa(oldLastKey, lastKeyStr, 10); //Convert it to string
 			isChanged = 1;
 		}
@@ -376,7 +314,7 @@ void IRrecAndUpdateScreen(){
 		intro = 0;
 	}
 
-	if(oldLastKey != lastKey){
+	if (oldLastKey != lastKey) {
 		LCD_Clear();
 	}
 
@@ -401,6 +339,41 @@ void IRrecAndUpdateScreen(){
 	}
 }
 
+void SendAllData() {
+	static int whatToSend = 0;
+	clearCommand(&commandStruct);
+
+	if ((whatToSend == 0) && (temperatureFromUsbToGrzej != NULL )) {
+		setCommandValues(&commandStruct, GRZEJNIK_NODE_ID,
+				GRZEJNIK_SET_DESIRED_TEMP, temperatureFromUsbToGrzej);
+	}
+
+	if ((whatToSend == 1) && (temperatureFromUsbToPiecWl != NULL )) {
+		setCommandValues(&commandStruct, PIEC_NODE_ID, PIEC_SET_ON_TEMP,
+				temperatureFromUsbToPiecWl);
+	}
+
+	if ((whatToSend == 2) && (temperatureFromUsbToPiecWyl != NULL )) {
+		setCommandValues(&commandStruct, PIEC_NODE_ID, PIEC_SET_OFF_TEMP,
+				temperatureFromUsbToPiecWyl);
+	}
+
+	if (commandStruct.nodeId != 0) {
+		encodeMessage(&commandStruct, bufor);
+		Send_Packet(bufor, strlen(bufor));
+		Send_Packet(bufor, strlen(bufor));
+		_delay_ms(1);
+		Send_Packet(bufor, strlen(bufor));
+		Send_Packet(bufor, strlen(bufor));
+
+		/*sprintf(screenLeft[0], bufor);
+		isChanged = 1;*/
+	}
+
+	whatToSend = whatToSend + 1;
+	whatToSend = whatToSend % 3;
+
+}
 
 int main(void) {
 	uchar i;
@@ -408,7 +381,6 @@ int main(void) {
 	static char carrierErrorCount = 0;
 	static int stop = 1;
 	static bool recv = false;
-	static command_t commandStruct;
 
 	wdt_enable(WDTO_1S);
 	//wdt_enable(WDTO_8S);
@@ -467,21 +439,16 @@ int main(void) {
 		_delay_ms(100);
 	}
 
-
 	/*
 	 * Prawodopodbnie któras z biblotek nieporpawnie inicjalizowa³a porty.
 	 * I ustawia³a PB0 jako wyjcie. Kiedy ma byc wejsciem odbiornika podczerwienii.
-	 */
-	DDRB &= ~(1 << PB0);
+	 */DDRB &= ~(1 << PB0);
 	sei();
 	for (;;) { /* main event loop */
 		wdt_reset();
 		usbPoll();
 
-		clearCommand(&commandStruct);
-		setCommandValues(&commandStruct,PIEC_NODE_ID,PIEC_READ_TEMP,"00.00");
-		encodeMessage(&commandStruct, bufor);
-		Send_Packet(bufor, strlen(bufor));
+		SendAllData();
 		Select_RX_Mode();
 
 		if (RFM70_Present()) {
@@ -500,12 +467,11 @@ int main(void) {
 			sprintf(screenDebug[1], screenDebugTemplate[1], "NONE");
 		}
 
-
-	    if (reciveErrorCount > 90) {
-	    			sprintf(screenDebug[2], screenDebugTemplate[2], "WAIT");
-	    } else {
-	    	sprintf(screenDebug[2], screenDebugTemplate[2], "OK");
-	    }
+		if (reciveErrorCount > 90) {
+			sprintf(screenDebug[2], screenDebugTemplate[2], "WAIT");
+		} else {
+			sprintf(screenDebug[2], screenDebugTemplate[2], "OK");
+		}
 
 		wdt_reset();
 		usbPoll();
@@ -517,51 +483,52 @@ int main(void) {
 		//cli();
 		recv = Packet_Received();
 		//sei();
-		while( ( recv == false) || (stop == 0) ){
+		while ((recv == false) || (stop == 0)) {
 			//cli();
 			Select_RX_Mode();
 			_delay_ms(1.5);
 			recv = Packet_Received();
 			//sei();
-	    	stop++;
+			stop++;
 
-	    	if (stop%32){
-	    		IRrecAndUpdateScreen();
-	    	}
+			if (stop % 32) {
+				IRrecAndUpdateScreen();
+			}
 
-	    	if (stop % 128){
-	    		wdt_reset();
-	    		usbPoll();
-	    	}
+			if (stop % 128) {
+				wdt_reset();
+				usbPoll();
+			}
 
-	    	if (stop > 1024){
-	    		stop = 0;
-	    		break;
-	    	}
+			if (stop > 1024) {
+				stop = 0;
+				break;
+			}
 
-	    	itoa(stop, bufor, 10);
-	    	sprintf(message, "B:%.1d %4d",recv, stop);
-	    	sprintf(screenDebug[3], screenDebugTemplate[3], message);
-	    }
+			itoa(stop, bufor, 10);
+			sprintf(message, "B:%.1d %4d", recv, stop);
+			sprintf(screenDebug[3], screenDebugTemplate[3], message);
+		}
 
 		wdt_reset();
 		usbPoll();
 
-	    if (recv == true){
+		if (recv == true) {
 			//wdt_reset();
 			//usbPoll();
-	    	stop = 1;
-	    	Receive_Packet(message);
-	    	decodeMessage(message, &commandStruct);
-	    	valueToScreen(&commandStruct);
+			stop = 1;
+			Receive_Packet(message);
+			decodeMessage(message, &commandStruct);
+			valueToScreen(&commandStruct);
 			//wdt_reset();
 			//usbPoll();
-	    	//_delay_ms(250);
+			//_delay_ms(250);
 
-	    	reciveErrorCount = 0;
-	    }  else {
+			reciveErrorCount = 0;
+		} else {
 			reciveErrorCount++;
 		}
+		updateValuesFromUSB();
 		//wdt_reset();
 		//usbPoll();
 
