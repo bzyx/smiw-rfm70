@@ -281,19 +281,19 @@ void valueToScreen(command_t* command) {
 }
 
 void updateValuesFromUSB() {
-	if (temperatureFromUsbToGrzej != NULL ) {
+	if (strlen(temperatureFromUsbToGrzej) > 0) {
 		temperatureFromUsbToGrzej[2] = '.';
 		sprintf(screenLeft[2], screenLeftTemplate[2],
 				temperatureFromUsbToGrzej);
 		isChanged = 1;
 	}
-	if (temperatureFromUsbToPiecWl != NULL ) {
+	if (strlen(temperatureFromUsbToPiecWl) >0 ) {
 		temperatureFromUsbToPiecWl[2] = '.';
 		sprintf(screenRight[2], screenRightTemplate[2],
 				temperatureFromUsbToPiecWl);
 		isChanged = 1;
 	}
-	if (temperatureFromUsbToPiecWyl != NULL ) {
+	if (strlen(temperatureFromUsbToPiecWyl)>0) {
 		temperatureFromUsbToPiecWyl[2] = '.';
 		sprintf(screenRight[3], screenRightTemplate[3],
 				temperatureFromUsbToPiecWyl);
@@ -343,17 +343,17 @@ void SendAllData() {
 	static int whatToSend = 0;
 	clearCommand(&commandStruct);
 
-	if ((whatToSend == 0) && (temperatureFromUsbToGrzej != NULL )) {
+	if ((whatToSend == 0) && (strlen(temperatureFromUsbToGrzej) > 0 ) ) {
 		setCommandValues(&commandStruct, GRZEJNIK_NODE_ID,
 				GRZEJNIK_SET_DESIRED_TEMP, temperatureFromUsbToGrzej);
 	}
 
-	if ((whatToSend == 1) && (temperatureFromUsbToPiecWl != NULL )) {
+	if ((whatToSend == 1) && (strlen(temperatureFromUsbToPiecWl) > 0) ) {
 		setCommandValues(&commandStruct, PIEC_NODE_ID, PIEC_SET_ON_TEMP,
 				temperatureFromUsbToPiecWl);
 	}
 
-	if ((whatToSend == 2) && (temperatureFromUsbToPiecWyl != NULL )) {
+	if ((whatToSend == 2) && (strlen(temperatureFromUsbToPiecWyl) > 0 ) ) {
 		setCommandValues(&commandStruct, PIEC_NODE_ID, PIEC_SET_OFF_TEMP,
 				temperatureFromUsbToPiecWyl);
 	}
