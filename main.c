@@ -41,17 +41,21 @@
 /* ------------------------------------------------------------------------- */
 
 PROGMEM char usbHidReportDescriptor[22] = { /* USB report descriptor */
-0x06, 0x00, 0xff, // USAGE_PAGE (Generic Desktop)
+		0x06, 0x00, 0xff, // USAGE_PAGE (Generic Desktop)
 		0x09, 0x01, // USAGE (Vendor Usage 1)
 		0xa1, 0x01, // COLLECTION (Application)
 		0x15, 0x00, //   LOGICAL_MINIMUM (0)
 		0x26, 0xff, 0x00, //   LOGICAL_MAXIMUM (255)
-		0x75, 0x03, //   REPORT_SIZE (8) -!!!!!!!! by³o 0x01
+		0x75, 0x01, //   REPORT_SIZE (1)
 		0x95, 0x80, //   REPORT_COUNT (128)
 		0x09, 0x00, //   USAGE (Undefined)
 		0xb2, 0x02, 0x01, //   FEATURE (Data,Var,Abs,Buf)
 		0xc0 // END_COLLECTION
 		};
+
+/*
+ * W pewnym momencie REPORT SIZE by³o 0x03
+ */
 
 /* Since we define only one feature report, we don't use report-IDs (which
  * would be the first byte of the report). The entire report consists of 128
@@ -75,7 +79,8 @@ static uchar bytesRemaining;
 static char temperatureFromMCP[10];
 static char temperatureFromPiec[10];
 static char temperatureFromGrzejnik[10];
-static char temperatureFromUsbToGrzej[10];
+static char temperatureFromUsbToGrzejWl[10];
+static char temperatureFromUsbToGrzejWyl[10];
 static char temperatureFromUsbToPiecWl[10];
 static char temperatureFromUsbToPiecWyl[10];
 static char lastKeyStr[4];
@@ -84,7 +89,8 @@ char znaki[4] = { 0xDF, 'C', '\0' };
 
 /* usbFunctionRead() is called when the host requests a chunk of data from
  * the device. For more information see the documentation in usbdrv/usbdrv.h.
- */uchar usbFunctionRead(uchar *data, uchar len) {
+ */
+uchar usbFunctionRead(uchar *data, uchar len) {
 	uchar i;
 
 	if (len > bytesRemaining) {
@@ -107,7 +113,7 @@ char znaki[4] = { 0xDF, 'C', '\0' };
 		bytesRemaining -= len;
 
 	}
-	return len;                             // return real chunk size
+	return len;
 }
 
 /* usbFunctionWrite() is called when the host sends a chunk of data to the
@@ -129,25 +135,30 @@ char znaki[4] = { 0xDF, 'C', '\0' };
 	}
 
 	switch (lineNo) {
-	case 1: { // Grzejnik
-		strncpy(temperatureFromUsbToGrzej, data, 4);
+	case 1: { // Grzejnik Wl
+		strncpy(temperatureFromUsbToGrzejWl, data, 4);
 		lineNo = 0;
 		return bytesRemaining;
 	}
 		break;
-	case 2: { // Piec W³¹cz
+	case 2: { // Grzejnik Wyl
+		strncpy(temperatureFromUsbToGrzejWyl, data, 4);
+		lineNo = 0;
+		return bytesRemaining;
+	}
+		break;
+	case 3: { // Piec W³¹cz
 		strncpy(temperatureFromUsbToPiecWl, data, 4);
 		lineNo = 0;
 		return bytesRemaining;
 	}
 		break;
-	case 3: { // Piec Wy³¹cz
+	case 4: { // Piec Wy³¹cz
 		strncpy(temperatureFromUsbToPiecWyl, data, 4);
 		lineNo = 0;
 		return bytesRemaining;
 	}
 		break;
-	case 4:
 	case 5:
 	case 6:
 	case 7:
@@ -200,7 +211,6 @@ void timer_init(void) {
 
 /* configure the ADC */
 void adc_init(void) {
-	//TODO: Tu cos by³o
 	//DIDR0 |= 1 << ADC0D; // turn digit input ADC0 off to reduce power
 	ADCSRA |= (1 << ADPS2) | (1 << ADPS1) | (1 << ADPS0); //ADC prescaler set to divide by 128 -> 125kHz operating speed
 	ADMUX |= (1 << REFS0);
@@ -281,10 +291,16 @@ void valueToScreen(command_t* command) {
 }
 
 void updateValuesFromUSB() {
-	if (strlen(temperatureFromUsbToGrzej) > 0) {
-		temperatureFromUsbToGrzej[2] = '.';
+	if (strlen(temperatureFromUsbToGrzejWl) > 0) {
+		temperatureFromUsbToGrzejWl[2] = '.';
 		sprintf(screenLeft[2], screenLeftTemplate[2],
-				temperatureFromUsbToGrzej);
+				temperatureFromUsbToGrzejWl);
+		isChanged = 1;
+	}
+	if (strlen(temperatureFromUsbToGrzejWyl) > 0) {
+		temperatureFromUsbToGrzejWyl[2] = '.';
+		sprintf(screenLeft[3], screenLeftTemplate[3],
+				temperatureFromUsbToGrzejWyl);
 		isChanged = 1;
 	}
 	if (strlen(temperatureFromUsbToPiecWl) >0 ) {
@@ -343,17 +359,22 @@ void SendAllData() {
 	static int whatToSend = 0;
 	clearCommand(&commandStruct);
 
-	if ((whatToSend == 0) && (strlen(temperatureFromUsbToGrzej) > 0 ) ) {
+	if ((whatToSend == 0) && (strlen(temperatureFromUsbToGrzejWl) > 0 ) ) {
 		setCommandValues(&commandStruct, GRZEJNIK_NODE_ID,
-				GRZEJNIK_SET_DESIRED_TEMP, temperatureFromUsbToGrzej);
+				GRZEJNIK_SET_ON_TEMP, temperatureFromUsbToGrzejWl);
 	}
 
-	if ((whatToSend == 1) && (strlen(temperatureFromUsbToPiecWl) > 0) ) {
+	if ((whatToSend == 1) && (strlen(temperatureFromUsbToGrzejWyl) > 0 ) ) {
+		setCommandValues(&commandStruct, GRZEJNIK_NODE_ID,
+				GRZEJNIK_SET_OFF_TEMP, temperatureFromUsbToGrzejWyl);
+	}
+
+	if ((whatToSend == 2) && (strlen(temperatureFromUsbToPiecWl) > 0) ) {
 		setCommandValues(&commandStruct, PIEC_NODE_ID, PIEC_SET_ON_TEMP,
 				temperatureFromUsbToPiecWl);
 	}
 
-	if ((whatToSend == 2) && (strlen(temperatureFromUsbToPiecWyl) > 0 ) ) {
+	if ((whatToSend == 3) && (strlen(temperatureFromUsbToPiecWyl) > 0 ) ) {
 		setCommandValues(&commandStruct, PIEC_NODE_ID, PIEC_SET_OFF_TEMP,
 				temperatureFromUsbToPiecWyl);
 	}
@@ -371,7 +392,7 @@ void SendAllData() {
 	}
 
 	whatToSend = whatToSend + 1;
-	whatToSend = whatToSend % 3;
+	whatToSend = whatToSend % 4;
 
 }
 
@@ -383,13 +404,6 @@ int main(void) {
 	static bool recv = false;
 
 	wdt_enable(WDTO_1S);
-	//wdt_enable(WDTO_8S);
-	/* Even if you don't use the watchdog, turn it off here. On newer devices,
-	 * the status of the watchdog (on/off, period) is PRESERVED OVER RESET!
-	 * RESET status: all port bits are inputs without pull-up.
-	 * That's the way we need D+ and D-. Therefore we don't need any
-	 * additional hardware initialization.
-	 */
 
 	usbInit();
 	usbDeviceDisconnect(); /* enforce re-enumeration, do this while interrupts are disabled! */
@@ -399,17 +413,10 @@ int main(void) {
 		_delay_ms(1);
 	}
 	usbDeviceConnect();
-	//sei();
 
-	//Ports initialization and other piperials
 	LCD_Initalize();
 	LCD_Clear();
 
-	/* About project screen */
-	//LCD_GoTo(center("SMiW 2011/2012"), 0);
-	//LCD_WriteText("SMiW 2011/2012");
-	//LCD_GoTo(center("Marcin Jabrzyk"), 2);
-	//LCD_WriteText("Marcin Jabrzyk");
 	irmp_init(); //IR libary
 	timer_init(); //IR timmer and ADC starter
 	adc_init(); //ADC configuration
@@ -426,7 +433,6 @@ int main(void) {
 		_delay_ms(100);
 	}
 
-	//_delay_ms(1000);
 	LCD_Clear();
 
 	if (RFM70_Present()) {
@@ -477,18 +483,12 @@ int main(void) {
 		usbPoll();
 
 		IRrecAndUpdateScreen();
-		//wdt_reset();
-		//usbPoll();
-
-		//cli();
 		recv = Packet_Received();
-		//sei();
+
 		while ((recv == false) || (stop == 0)) {
-			//cli();
 			Select_RX_Mode();
 			_delay_ms(1.5);
 			recv = Packet_Received();
-			//sei();
 			stop++;
 
 			if (stop % 32) {
@@ -520,17 +520,12 @@ int main(void) {
 			Receive_Packet(message);
 			decodeMessage(message, &commandStruct);
 			valueToScreen(&commandStruct);
-			//wdt_reset();
-			//usbPoll();
-			//_delay_ms(250);
 
 			reciveErrorCount = 0;
 		} else {
 			reciveErrorCount++;
 		}
 		updateValuesFromUSB();
-		//wdt_reset();
-		//usbPoll();
 
 		wdt_reset();
 		usbPoll();

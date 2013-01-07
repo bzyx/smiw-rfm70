@@ -8,8 +8,8 @@
 #ifndef SCREEN_DEFS_H_
 #define SCREEN_DEFS_H_
 
-static char screenLeft[4][17] = { "    Grzejnik", "Temp. akt     --", "Temp. wym     --", " " };
-static char screenLeftTemplate[4][17] = { "Grzejnik", "Temp. akt:  %s", "Temp. wym:  %s", "" };
+static char screenLeft[4][17] = { "    Grzejnik", "Temp. akt     --", "Temp. Wl      --", "Temp. Wyl     --"  };
+static char screenLeftTemplate[4][17] = { "Grzejnik", "Temp. akt:  %s", "Temp. Wl:   %s", "Temp. Wyl:  %s" };
 
 static char screenCenter[4][17] = { "   System C.O.", "Grzejnik:    CH-", "Piec:        CH+",
 				"Temp. akt     --" };
